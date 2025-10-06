@@ -51,7 +51,7 @@ export default function Login() {
         <Button type="submit" className="w-full">Login</Button>
       </form>
       <p className="mt-4 text-sm">
-        Don’t have an account?{" "}
+        Do not have an account?{" "}
         <Link to="/signup" className="text-primary hover:underline">Sign up</Link>
       </p>
     </div>
