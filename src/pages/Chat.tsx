@@ -14,7 +14,7 @@ export default function Chat() {
   const suggestions = [
     "I have a headache and sore throat",
     "I feel chest tightness when walking",
-    "I’m feeling weak and tired lately",
+    "I am feeling weak and tired lately",
     "I have stomach pain after eating",
   ];
 
