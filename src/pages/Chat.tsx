@@ -1,124 +1,119 @@
-import { useEffect, useRef, useState } from "react";
-import { useAIChat } from "@/hooks/useAIChat";
-import { ReactMarkdown } from "react-markdown/lib/react-markdown";
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAIChat } from "../hooks/useAIChat";
 
 export default function Chat() {
-  const { loading, sending, messages, sendUserMessage } = useAIChat();
+  const { messages, loading, error, sendMessage } = useAIChat();
   const [input, setInput] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    sendMessage(input);
+    setInput("");
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const suggestions = [
-    "I have a headache and sore throat",
-    "I feel chest tightness when walking",
-    "I am feeling weak and tired lately",
-    "I have stomach pain after eating",
-  ];
-
-  if (loading) {
-    return (
-      <div className="p-8 text-center text-muted-foreground">
-        Loading chat…
-      </div>
-    );
-  }
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <div className="flex flex-col h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-white border-b px-4 py-3">
-        <div className="font-semibold">SwasthyaAI Assistant</div>
-        <div className="text-xs text-gray-500">
-          Describe your symptoms in your own words.
-        </div>
+      <header className="p-4 bg-white shadow-sm border-b flex flex-col items-center justify-center">
+        <h1 className="text-2xl font-semibold text-blue-600">SwasthyaAI</h1>
+        <p className="text-sm text-gray-500">
+          Your friendly AI health assistant 💙
+        </p>
       </header>
 
       {/* Chat area */}
-      <main className="flex-1 overflow-y-auto px-4 py-4">
-        {!messages.length && (
-          <div className="mb-4 flex flex-wrap gap-2">
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                onClick={() => setInput(s)}
-                className="text-sm px-3 py-1.5 rounded-full border hover:bg-gray-50"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
+      <main className="flex-1 overflow-y-auto px-4 py-6 space-y-4 scrollbar-hide">
+        <AnimatePresence>
+          {messages.length === 0 && !loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-gray-400 text-center mt-32"
+            >
+              Start a conversation by describing your symptoms 👇
+            </motion.div>
+          )}
 
-        <div className="space-y-3">
-          {messages.map((m) => (
-            <div
-              key={m.id}
+          {messages.map((msg) => (
+            <motion.div
+              key={msg.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
               className={`flex ${
-                m.role === "user" ? "justify-end" : "justify-start"
+                msg.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
               <div
-                className={`max-w-[75%] rounded-2xl px-4 py-2 shadow ${
-                  m.role === "user"
-                    ? "bg-primary text-white"
-                    : "bg-white border"
+                className={`max-w-[75%] rounded-2xl px-4 py-3 shadow ${
+                  msg.role === "user"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-800"
                 }`}
               >
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown>{m.text}</ReactMarkdown>
-                </div>
+                {msg.content}
               </div>
-            </div>
+            </motion.div>
           ))}
 
-          {sending && (
-            <div className="flex justify-start">
-              <div className="max-w-[75%] rounded-2xl px-4 py-2 bg-white border shadow">
-                <span className="inline-flex gap-1">
-                  <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce"></span>
-                  <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce [animation-delay:120ms]"></span>
-                  <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce [animation-delay:240ms]"></span>
-                </span>
+          {loading && (
+            <motion.div
+              key="typing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex justify-start"
+            >
+              <div className="bg-gray-200 px-4 py-3 rounded-2xl flex space-x-1">
+                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></span>
               </div>
-            </div>
+            </motion.div>
           )}
-          <div ref={bottomRef} />
-        </div>
+        </AnimatePresence>
+
+        {error && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-red-500 text-center mt-4"
+          >
+            {error}
+          </motion.div>
+        )}
+
+        <div ref={chatEndRef} />
       </main>
 
-      {/* Composer */}
+      {/* Input area */}
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const text = input.trim();
-          if (!text) return;
-          sendUserMessage(text);
-          setInput("");
-        }}
-        className="border-t bg-white px-3 py-3"
+        onSubmit={handleSubmit}
+        className="p-4 bg-white border-t flex items-center gap-2 shadow-sm"
       >
-        <div className="flex gap-2">
-          <input
-            className="flex-1 border rounded-xl px-4 py-2"
-            placeholder="Tell me what you're feeling…"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="px-5 py-2 rounded-xl bg-primary text-white disabled:opacity-50"
-            disabled={!input.trim() || sending}
-          >
-            Send
-          </button>
-        </div>
-        <p className="mt-2 text-xs text-gray-500">
-          Disclaimer: This is not a medical diagnosis. Seek professional care
-          for emergencies.
-        </p>
+        <input
+          type="text"
+          placeholder="Describe your symptoms..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="bg-blue-600 text-white px-5 py-2 rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+        >
+          Send
+        </button>
       </form>
     </div>
   );

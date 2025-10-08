@@ -20,13 +20,13 @@ export default function Signup() {
       const userCred = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCred.user;
 
-      // Create empty profile in Firestore
+      //Empty profile in Firestore
       await setDoc(doc(db, "users", user.uid), {
         email: user.email,
         createdAt: new Date(),
       });
 
-      navigate("/profile-setup"); // ✅ After signup, go to form
+      navigate("/profile-setup"); // After signup, go to form
     } catch (err: any) {
       if (err.code === "auth/email-already-in-use") {
         setError("Account already exists. Please log in.");

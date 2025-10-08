@@ -1,160 +1,60 @@
-// src/hooks/useAIChat.ts
-
-import { useEffect, useRef, useState } from "react";
-import { auth, db } from "@/lib/firebase";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { AIResponsePayload, ChatMessage } from "@/lib/types";
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
 
 export function useAIChat() {
-  const user = auth.currentUser;
-  const [caseId, setCaseId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const unsubRef = useRef<() => void>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      console.log("🧠 useAIChat started...");
+  const sendMessage = async (userMessage: string) => {
+    if (!userMessage.trim()) return;
 
-      if (!user) {
-        console.log("❌ No logged in user.");
-        return;
-      }
-
-      console.log("✅ User UID:", user.uid);
-
-      try {
-        // Fetch profile
-        const userRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userRef);
-
-        if (!userSnap.exists()) {
-          console.warn("⚠️ User document does not exist.");
-          setLoading(false);
-          return;
-        }
-
-        const userData = userSnap.data();
-        if (!userData.profile) {
-          console.warn("⚠️ User profile is missing.");
-          setLoading(false);
-          return;
-        }
-
-        console.log("📋 User profile loaded:", userData.profile);
-        setProfile(userData.profile);
-
-        // Create a new case
-        const id = uuidv4();
-        setCaseId(id);
-        const caseRef = doc(db, "users", user.uid, "cases", id);
-
-        await setDoc(caseRef, {
-          createdAt: serverTimestamp(),
-          startedBy: user.email || "anonymous",
-        });
-
-        console.log("📁 New case created:", id);
-
-        // Listen to messages in this case
-        const messagesRef = collection(caseRef, "messages");
-        const q = query(messagesRef, orderBy("createdAt", "asc"));
-
-        const unsub = onSnapshot(q, (snapshot) => {
-          const msgs = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...(doc.data() as ChatMessage),
-          }));
-          setMessages(msgs);
-          console.log("💬 Messages updated:", msgs);
-        });
-
-        unsubRef.current = unsub;
-        setLoading(false);
-        console.log("✅ Chat interface ready");
-      } catch (err) {
-        console.error("🔥 Error setting up chat:", err);
-        setLoading(false);
-      }
-    })();
-
-    return () => unsubRef.current?.();
-  }, [user]);
-
-  const sendUserMessage = async (text: string) => {
-    if (!user || !caseId || !text.trim()) return;
-    setSending(true);
-
-    const caseRef = doc(db, "users", user.uid, "cases", caseId);
-    const mref = collection(caseRef, "messages");
-
-    // Store user message
-    await addDoc(mref, {
+    const newMessage: ChatMessage = {
+      id: uuidv4(),
       role: "user",
-      text,
-      createdAt: serverTimestamp(),
-    } as ChatMessage);
+      content: userMessage,
+    };
+
+    setMessages((prev) => [...prev, newMessage]);
+    setLoading(true);
+    setError(null);
 
     try {
-      const payload = {
-        userId: user.uid,
-        caseId,
-        profile,
-        messages: [...messages, { role: "user", text }],
-      };
-
-      const res = await fetch("/api/chat", {
+      const res = await fetch("http://localhost:8080/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ message: userMessage }),
       });
 
-      if (!res.ok) throw new Error("AI backend error");
+      const data = await res.json();
+      console.log("🤖 Backend response:", data);
 
-      const data: AIResponsePayload = await res.json();
+      const text =
+        data?.response ||
+        data?.message ||
+        data?.content ||
+        "⚠️ Sorry, I couldn’t process that right now.";
 
-      // Add AI reply
-      await addDoc(mref, {
-        role: "bot",
-        text: data.reply || "I’m here to help. Can you tell me more?",
-        createdAt: serverTimestamp(),
-      } as ChatMessage);
+      const aiMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: text,
+      };
 
-      // Save analysis (optional)
-      if (data.analysis) {
-        await setDoc(
-          caseRef,
-          {
-            analysis: data.analysis,
-            analysisUpdatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      }
+      setMessages((prev) => [...prev, aiMessage]);
     } catch (err) {
-      console.error("⚠️ AI backend failed:", err);
-      await addDoc(mref, {
-        role: "bot",
-        text: "Sorry, I couldn't process your message right now.",
-        createdAt: serverTimestamp(),
-      } as ChatMessage);
+      console.error("Error fetching AI response:", err);
+      setError("⚠️ Sorry, something went wrong while fetching AI response.");
     } finally {
-      setSending(false);
+      setLoading(false);
     }
   };
 
-  return { loading, sending, caseId, messages, profile, sendUserMessage };
+  return { messages, loading, error, sendMessage };
 }
